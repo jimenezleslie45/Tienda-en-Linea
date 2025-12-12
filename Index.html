@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="es">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tienda de Billeteras</title>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      box-sizing: border-box;
+      /* Fondo azul translúcido: suave degradado con toques de azul y transparencia */
+      background: radial-gradient(800px 400px at 10% 10%, rgba(93,156,255,0.10), transparent 12%),
+                  radial-gradient(700px 300px at 90% 90%, rgba(100,180,255,0.08), transparent 12%),
+                  linear-gradient(180deg, rgba(230,245,255,0.95) 0%, rgba(215,235,255,0.9) 50%, rgba(195,225,255,0.85) 100%);
+      background-attachment: fixed;
+      color-scheme: light;
+    }
+    
+    .product-card {
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .product-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    }
+    
+    .btn-primary {
+      transition: all 0.3s ease;
+    }
+    
+    .btn-primary:hover {
+      transform: scale(1.05);
+    }
+    
+    .badge {
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.8;
+      }
+    }
+    /* Lightbox styles */
+    .lightbox-overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.7);
+      z-index: 2000;
+      padding: 20px;
+    }
+    .lightbox-overlay.active { display: flex; }
+    .lightbox-card {
+      max-width: 1100px;
+      width: 100%;
+      max-height: 90vh;
+      background: rgba(255,255,255,0.96);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 30px 60px rgba(2,6,23,0.25);
+      display: grid;
+      grid-template-columns: 1fr 360px;
+    }
+    .lightbox-card img { width: 100%; height: 100%; object-fit: contain; background: #f8fafc; }
+    .lightbox-meta { padding: 20px; display:flex; flex-direction:column; gap:12px; }
+    .lightbox-meta h4 { margin:0; font-size:20px; }
+    .lightbox-meta p { margin:0; color:#334155; }
+    .lightbox-actions { margin-top:auto; display:flex; gap:10px; }
+    .lightbox-close { position:absolute; top:18px; right:20px; color:#fff; font-size:28px; cursor:pointer; }
+    /* Mejoras visuales para tarjetas: efecto glass, borde suave y mayor tamaño de imagen */
+    .product-card {
+      background: rgba(255,255,255,0.6);
+      backdrop-filter: blur(6px) saturate(120%);
+      border: 1px solid rgba(255,255,255,0.25);
+      box-shadow: 0 8px 30px rgba(2,6,23,0.08);
+    }
+    .product-card img {
+      height: 320px !important;
+      object-fit: cover;
+    }
+    /* QR modal & floating button */
+    .qr-fab {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: linear-gradient(180deg,#60a5fa,#3b82f6);
+      color: white;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      box-shadow: 0 8px 20px rgba(59,130,246,0.24);
+      border: none;
+      cursor: pointer;
+      z-index: 3000;
+    }
+    .qr-modal { position: fixed; inset:0; display:none; align-items:center; justify-content:center; background: rgba(2,6,23,0.6); z-index: 4000; }
+    .qr-modal.active { display:flex; }
+    .qr-modal-content { background: white; padding:20px; border-radius:12px; box-shadow: 0 20px 50px rgba(2,6,23,0.3); text-align:center; max-width:320px; }
+    .qr-modal-content img { width:260px; height:260px; object-fit:contain; }
+    .qr-close { margin-top:12px; background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+ </head>
+ <body class="h-full">
+  <div id="app" class="w-full h-full overflow-auto"><!-- Header -->
+  <header class="w-full py-6 px-6 shadow-md" style="background: linear-gradient(90deg,#0f172a 0%, #8b0e0e 100%);">
+   <div class="max-w-6xl mx-auto flex items-center justify-between">
+    <div class="flex items-center gap-4">
+    <div class="w-12 h-12 rounded-lg bg-white flex items-center justify-center shadow-sm">
+  <img src="imagenes/logo.png" alt="logo" class="w-10 h-10 object-contain" />
+    </div>
+    <div>
+     <h1 id="store-title" class="text-3xl font-bold text-white">Accesorios García</h1>
+     <p id="tagline" class="text-sm opacity-80 text-white/80">Billeteras de Calidad Exportadas desde USA</p>
+    </div>
+    </div>
+  <nav class="hidden md:flex items-center gap-6 text-white font-semibold">
+  <a href="#inicio" class="hover:underline">Inicio</a>
+  <a href="#productos" class="hover:underline">Productos</a>
+  <a href="#colecciones" class="hover:underline">Colecciones</a>
+  <a href="#contacto" class="hover:underline">Contacto</a>
+  </nav>
+    <div class="flex items-center gap-3">
+    <button id="whatsapp-cta" class="btn-primary px-4 py-2 rounded-xl font-bold text-white bg-emerald-500 hover:bg-emerald-600 shadow-md" onclick="openWhatsAppForNumber()">📱 WhatsApp</button>
+    </div>
+   </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section id="inicio" class="w-full py-28 px-6" style="background: linear-gradient(180deg, rgba(248,250,252,0.8), rgba(248,250,252,0.95));">
+   <div class="max-w-6xl mx-auto text-center">
+    <h2 class="text-5xl md:text-6xl font-extrabold mb-6 text-slate-900 drop-shadow-[0_6px_8px_rgba(0,0,0,0.18)]">Billeteras de Calidad Exportadas desde USA</h2>
+    <p class="text-lg md:text-xl opacity-80 mb-8 max-w-3xl mx-auto">Accesorios Garcia te ofrece variedad de productos 100%100 original  no imitación— ideales para uso diario y como regalo.</p>
+    <div class="flex items-center justify-center gap-4">
+    <button class="btn-primary px-8 py-4 rounded-3xl font-bold text-lg bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg" onclick="openWhatsAppForNumber('¡Hola! Me interesa comprar. ¿Tienen stock disponible?')">Comprar por WhatsApp</button>
+    <a href="#productos" class="px-6 py-4 rounded-3xl font-semibold border border-slate-200 text-slate-900">Ver Productos</a>
+    </div>
+   </div>
+  </section>
+
+  <!-- Products Grid -->
+  <section id="productos" class="w-full py-12 px-6">
+   <div class="max-w-6xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+      <h3 class="text-3xl font-bold text-center mx-auto">Nuestros Productos</h3>
+      <div class="ml-auto">
+        <button class="btn-primary px-4 py-2 rounded-lg bg-slate-800 text-white" onclick="openPriceEditor()">Editar precios</button>
+      </div>
+    </div>
+    <div id="products-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
+   </div>
+  </section>
+  <!-- Highlight CTA removed as requested -->
+
+  <!-- Colecciones: Hombres / Mujeres / Sin clasificar -->
+  <section id="colecciones" class="w-full py-12 px-6">
+    <div class="max-w-6xl mx-auto">
+     <h3 class="text-3xl font-bold mb-6 text-center">Colecciones</h3>
+     <p class="text-center opacity-80 mb-6">Clasifica las imágenes por categoría. Usa los botones para mover cada foto a "Hombres" o "Mujeres".</p>
+     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+       <div>
+         <h4 class="text-xl font-semibold mb-3">Hombres</h4>
+         <div id="col-hombres" class="grid grid-cols-2 gap-3"></div>
+       </div>
+       <div>
+         <h4 class="text-xl font-semibold mb-3">Mujeres</h4>
+         <div id="col-mujeres" class="grid grid-cols-2 gap-3"></div>
+       </div>
+       <div>
+      <!-- columna sin encabezado (imágenes pendientes de asignación) -->
+      <div id="col-unassigned" class="grid grid-cols-2 gap-3"></div>
+       </div>
+     </div>
+    </div>
+  </section>
+
+   <!-- Features -->
+   <section class="w-full py-16 px-6">
+    <div class="max-w-6xl mx-auto">
+     <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+      <div class="p-6">
+       <div class="text-4xl mb-4">
+        🇺🇸
+       </div>
+       <h4 class="text-xl font-bold mb-2">Importación Directa</h4>
+       <p class="opacity-75">Productos originales desde Estados Unidos</p>
+      </div>
+      <div class="p-6">
+       <div class="text-4xl mb-4">
+        ✅
+       </div>
+       <h4 class="text-xl font-bold mb-2">100% Originales</h4>
+       <p class="opacity-75">Garantía de autenticidad en todos nuestros productos</p>
+      </div>
+      <div class="p-6">
+       <div class="text-4xl mb-4">
+        🚚
+       </div>
+       <h4 class="text-xl font-bold mb-2">Envío Seguro</h4>
+       <p class="opacity-75">Entrega rápida y confiable a todo departamentos</p>
+      </div>
+     </div>
+    </div>
+  </section><!-- CTA Section -->
+  <section id="contacto" class="w-full py-16 px-6">
+    <div class="max-w-4xl mx-auto text-center rounded-3xl p-12">
+     <h3 class="text-4xl font-bold mb-6">¿Listo para comprar?</h3>
+     <p class="text-xl opacity-90 mb-8">Contáctanos para realizar tu pedido o resolver cualquier duda</p>
+  <div class="flex flex-wrap gap-4 justify-center"><button id="whatsapp-btn" class="btn-primary px-8 py-4 rounded-xl font-bold text-lg flex items-center gap-2" onclick="openWhatsAppForNumber()"> <span>📱</span> <span id="whatsapp-text">Contactar por WhatsApp</span> </button> <button class="btn-primary px-8 py-4 rounded-xl font-bold text-lg flex items-center gap-2" onclick="showContactInfo()"> <span>✉️</span> <span id="contact-text">Más Información</span> </button>
+     </div>
+    </div>
+   </section><!-- Contact Info Modal -->
+   <div id="contact-modal" class="fixed inset-0 flex items-center justify-center p-4 hidden" style="z-index: 1000;">
+    <div class="absolute inset-0 bg-black opacity-50" onclick="hideContactInfo()"></div>
+    <div class="relative rounded-2xl p-8 max-w-md w-full shadow-2xl"><button class="absolute top-4 right-4 text-2xl opacity-50 hover:opacity-100" onclick="hideContactInfo()">×</button>
+     <h3 class="text-2xl font-bold mb-4">Información de Contacto</h3>
+     <p class="mb-4">Para realizar tu pedido o consultas:</p>
+  <div class="space-y-3">
+  <div class="flex items-center gap-3"><span>📱</span> <span>WhatsApp: 45869562</span>
+  </div>
+      <div class="flex items-center gap-3"><span>✉️</span> <span>Email: ventas@billeteras.com</span>
+      </div>
+      <div class="flex items-center gap-3"><span>📍</span> <span>Envíos a todo el país</span>
+      </div>
+     </div><button class="w-full mt-6 btn-primary px-6 py-3 rounded-xl font-semibold" onclick="hideContactInfo()"> Cerrar </button>
+    </div>
+   </div>
+
+  <!-- Footer -->
+  <footer class="w-full mt-12 bg-slate-900 text-white py-8">
+   <div class="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-start justify-between gap-6">
+    <div>
+    <h4 class="text-2xl font-bold">Accesorios García</h4>
+    <p class="opacity-80 text-sm mt-2">Billeteras importadas | Calidad y garantía</p>
+    </div>
+    <div>
+    <h5 class="font-semibold">Contacto</h5>
+    <p class="text-sm mt-2">WhatsApp: <a href="#" onclick="openWhatsAppForNumber()" class="underline">45869562</a></p>
+    <p class="text-sm">Email: ventas@billeteras.com</p>
+    </div>
+    <div>
+    <h5 class="font-semibold">Envíos y Políticas</h5>
+    <p class="text-sm mt-2">Envíos rápidos a todo el país. No devoluciones .</p>
+    </div>
+   </div>
+   <div class="max-w-6xl mx-auto px-6 mt-6 border-t border-slate-800 pt-4 text-sm opacity-80">© <span id="year"></span> Accesorios García.</div>
+  </footer>
+  <!-- Lightbox overlay -->
+  <div id="lightbox-overlay" class="lightbox-overlay" onclick="closeLightbox()">
+    <div class="lightbox-card" onclick="event.stopPropagation()">
+      <img id="lightbox-image" src="" alt="Ampliada" />
+      <div class="lightbox-meta">
+        <h4 id="lightbox-title">Producto</h4>
+        <p id="lightbox-price" class="text-xl font-bold text-emerald-600"> </p>
+        <p class="opacity-75">Descripción breve del producto. Revisa las características y solicita más información por WhatsApp.</p>
+        <div class="lightbox-actions">
+          <button id="lightbox-buy" class="btn-primary px-4 py-2 rounded-lg font-semibold bg-emerald-500 text-white" style="display:none;" onclick="">Comprar</button>
+          <button class="btn-primary px-4 py-2 rounded-lg font-semibold bg-slate-200 text-slate-900" onclick="closeLightbox()">Cerrar</button>
+        </div>
+      </div>
+    </div>
+    <div class="lightbox-close" onclick="closeLightbox()">×</div>
+  </div>
+  </div>
+  <script src="saved_prices.js"></script>
+  <script>
+    const defaultConfig = {
+      background_color: '#f8fafc',
+      header_color: '#ffffff',
+      primary_color: '#2563eb',
+      text_color: '#1e293b',
+      card_color: '#ffffff',
+      store_title: 'Billeteras Premium',
+      tagline: '100% Importadas desde USA',
+      product1_name: 'Billetera Clásica Hombre',
+      product1_price: '$45.00',
+      product2_name: 'Billetera Elegante Mujer',
+      product2_price: '$52.00',
+      product3_name: 'Billetera Premium Unisex',
+      product3_price: '$68.00',
+      whatsapp_text: 'Contactar por WhatsApp',
+      contact_text: 'Más Información',
+      font_family: 'system-ui',
+      font_size: 16
+    };
+
+    // Número de contacto (editar aquí según sea necesario).
+    // Nota: para que WhatsApp abra directamente a un número específico en producción,
+    // el número debe estar en formato internacional sin signos, por ejemplo 521234567890 (52 = México).
+    // El usuario proporcionó: 45869562 — si necesitas agregar código de país, actualízalo abajo.
+    const CONTACT_NUMBER = '45869562';
+
+    function formatWhatsAppUrl(number, message) {
+      // Si number parece ser un número (solo dígitos), intentamos usar wa.me/number
+      const digitsOnly = String(number).replace(/[^0-9]/g, '');
+      if (digitsOnly.length >= 7) {
+        // Intentamos abrir chat directo al número. Si no funciona, se puede cambiar el número a formato internacional.
+        return `https://wa.me/${digitsOnly}?text=${encodeURIComponent(message)}`;
+      }
+      // Fallback: abrir la ventana de WhatsApp con mensaje prellenado (usuario debe elegir contacto)
+      return `https://wa.me/?text=${encodeURIComponent(message + " (Contacto: " + number + ")")}`;
+    }
+
+    function openWhatsAppForNumber(message = '¡Hola! Me gustaría conocer más sobre sus billeteras importadas.') {
+      const url = formatWhatsAppUrl(CONTACT_NUMBER, message);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    function buyNow(productName, price) {
+      const message = `¡Hola! Quiero comprar: ${productName} (${price}). ¿Cómo puedo proceder con el pago y el envío?`;
+      openWhatsAppForNumber(message);
+    }
+
+    /* Lightbox behavior */
+    function openLightbox(imgEl) {
+      const overlay = document.getElementById('lightbox-overlay');
+      const lbImg = document.getElementById('lightbox-image');
+      const lbTitle = document.getElementById('lightbox-title');
+      const lbPrice = document.getElementById('lightbox-price');
+      const lbBuy = document.getElementById('lightbox-buy');
+      lbImg.src = imgEl.src;
+      const title = imgEl.dataset.title || imgEl.alt || '';
+      const price = imgEl.dataset.price || '';
+      lbTitle.textContent = title;
+      lbPrice.textContent = price;
+      if (price) {
+        lbBuy.style.display = 'inline-flex';
+        lbBuy.onclick = function(){ buyNow(title, price); };
+      } else {
+        lbBuy.style.display = 'none';
+        lbBuy.onclick = null;
+      }
+      overlay.classList.add('active');
+    }
+
+    function closeLightbox(){
+      const overlay = document.getElementById('lightbox-overlay');
+      overlay.classList.remove('active');
+    }
+
+    // Lista de imágenes (generada desde la carpeta imagenes). Excluye logo.png
+    const imageFiles = [
+      "IMG-20251211-WA0038.jpg",
+      "IMG-20251211-WA0039.jpg",
+      "IMG-20251211-WA0040.jpg",
+      "IMG-20251211-WA0041.jpg",
+      "IMG-20251211-WA0042.jpg",
+      "IMG-20251211-WA0043.jpg",
+      "IMG-20251211-WA0044.jpg",
+      "IMG-20251211-WA0045.jpg",
+      "IMG-20251211-WA0046.jpg",
+      "IMG-20251211-WA0047.jpg",
+      "IMG-20251211-WA0048.jpg",
+      "IMG-20251211-WA0049.jpg",
+      "IMG-20251211-WA0050.jpg",
+      "IMG-20251211-WA0051.jpg",
+      "IMG-20251211-WA0052.jpg",
+      "IMG-20251211-WA0054.jpg",
+      "IMG-20251211-WA0056.jpg",
+      "IMG-20251211-WA0057.jpg",
+      "IMG-20251211-WA0058.jpg",
+      "IMG-20251211-WA0059.jpg",
+      "IMG-20251211-WA0060.jpg",
+      "IMG-20251211-WA0061.jpg",
+      "IMG-20251211-WA0062.jpg",
+      "IMG-20251211-WA0063.jpg",
+      "IMG-20251211-WA0064.jpg",
+      "IMG-20251211-WA0065.jpg",
+      "IMG-20251211-WA0066.jpg",
+      "IMG-20251211-WA0067.jpg",
+      "IMG_20251211_161139.png",
+      "IMG_20251211_161246.png",
+      "IMG_20251211_220052_095.jpg",
+      "Photoroom-20251211_225155998.png"
+    ];
+
+    // Carga precios guardados en localStorage (si existen)
+    function loadSavedPrices(){
+      try{ return JSON.parse(localStorage.getItem('savedPrices') || '{}'); }catch(e){ return {}; }
+    }
+
+    function savePricesObj(obj){ localStorage.setItem('savedPrices', JSON.stringify(obj)); }
+
+    function renderProducts(){
+      const grid = document.getElementById('products-grid');
+      grid.innerHTML = '';
+      const saved = loadSavedPrices();
+      imageFiles.forEach(file => {
+        const title = file.replace(/\.[^.]+$/, '').replace(/[_-]/g,' ').replace(/IMG\s*/i,'').trim();
+        const price = saved[file] || '';
+        const card = document.createElement('div');
+        card.className = 'product-card rounded-2xl overflow-hidden shadow-lg';
+        card.style.background = 'rgba(96,165,250,0.06)'; // azul translúcido con gris
+        card.innerHTML = `
+          <img src="imagenes/${file}" alt="${title}" class="w-full h-56 object-cover lightbox-trigger" data-title="${title}" data-price="${price}" onclick="openLightbox(this)" />
+          <div class="p-6">
+            <h4 class="text-xl font-bold mb-2">${title}</h4>
+            <p class="opacity-75 mb-4 text-sm">Descripción del producto. Revisa la imagen para ver detalles y precio.</p>
+            <div class="flex items-center justify-between"><span class="text-2xl font-bold price-display">${price ? price : 'Consultar'}</span> <button class="btn-primary px-4 py-2 rounded-lg font-semibold bg-emerald-500 text-white" onclick="buyNow('${title}','${price ? price : 'Consultar'}')">Comprar</button></div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    // Modal para editar precios en masa
+    function openPriceEditor(){
+      const saved = loadSavedPrices();
+      const modalHtml = document.createElement('div');
+      modalHtml.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40';
+      modalHtml.id = 'price-editor-modal';
+      modalHtml.innerHTML = `
+        <div class="bg-white rounded-lg p-6 max-w-3xl w-full">
+          <h3 class="text-xl font-bold mb-4">Editor de precios</h3>
+          <div style="max-height:60vh; overflow:auto;" id="price-list">
+          </div>
+          <div class="mt-4 flex justify-end gap-2">
+            <button class="px-4 py-2 rounded bg-slate-200" onclick="closePriceEditor()">Cancelar</button>
+            <button class="px-4 py-2 rounded bg-emerald-500 text-white" onclick="savePricesFromEditor()">Guardar precios</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modalHtml);
+      const list = document.getElementById('price-list');
+      imageFiles.forEach(file => {
+        const title = file.replace(/\.[^.]+$/, '').replace(/[_-]/g,' ').replace(/IMG\s*/i,'').trim();
+        const row = document.createElement('div');
+        row.className = 'mb-3 flex items-center gap-3';
+        row.innerHTML = `<div class="w-16"><img src="imagenes/${file}" class="w-16 h-12 object-cover rounded"/></div><div class="flex-1">${title}</div><div><input class="border px-2 py-1" data-file="${file}" value="${saved[file] || ''}" placeholder="Ej: $240" /></div>`;
+        list.appendChild(row);
+      });
+    }
+
+    function closePriceEditor(){ const m = document.getElementById('price-editor-modal'); if(m) m.remove(); }
+
+    function savePricesFromEditor(){
+      const inputs = Array.from(document.querySelectorAll('#price-list input'));
+      const obj = loadSavedPrices();
+      inputs.forEach(i=>{ const f=i.dataset.file; const v=i.value.trim(); if(v) obj[f]=v; else delete obj[f]; });
+      savePricesObj(obj);
+      // Update DOM prices
+      document.querySelectorAll('#products-grid .price-display').forEach(span=>{
+        // find corresponding card by img src
+        const img = span.closest('.product-card').querySelector('img');
+        const file = img ? img.src.split('/').pop() : null;
+        if(file && obj[file]) span.textContent = obj[file];
+      });
+      // update data-price attr for lightbox
+      document.querySelectorAll('#products-grid img.lightbox-trigger').forEach(img=>{
+        const f=img.src.split('/').pop(); if(f && obj[f]) img.dataset.price = obj[f];
+      });
+      closePriceEditor();
+    }
+
+    // --- Categorías: Hombres / Mujeres / 
+    const defaultCategoryAssign = {
+      // Preasignaciones basadas en etiquetas detectadas anteriormente
+      "IMG-20251211-WA0038.jpg": 'Hombres',
+      "IMG-20251211-WA0041.jpg": 'Mujeres'
+      // Si hay más que quieras preasignar, agrégalos aquí
+    };
+
+    function loadImageCategories(){
+      try{
+        const saved = JSON.parse(localStorage.getItem('imageCategories') || '{}');
+        const map = {};
+        imageFiles.forEach(f=>{
+          if(saved[f] !== undefined) map[f] = saved[f];
+          else if(defaultCategoryAssign[f]) map[f] = defaultCategoryAssign[f];
+          else map[f] = '';
+        });
+        return map;
+      }catch(e){
+        // fallback: todas sin asignar
+        const m = {};
+        imageFiles.forEach(f=> m[f]='');
+        return m;
+      }
+    }
+
+    function saveImageCategories(map){
+      localStorage.setItem('imageCategories', JSON.stringify(map));
+    }
+
+    function createCategoryCard(file, currentCategory){
+      const wrapper = document.createElement('div');
+      wrapper.className = 'rounded-lg overflow-hidden shadow-sm bg-white p-2';
+      const img = document.createElement('img');
+      img.src = `imagenes/${file}`;
+      img.alt = file;
+      img.className = 'w-full h-28 object-cover rounded';
+      img.onclick = function(){ openLightbox(img); };
+      const title = document.createElement('div');
+      title.className = 'text-sm mt-2 mb-2 font-medium';
+      title.textContent = file.replace(/\.[^.]+$/, '').replace(/[_-]/g,' ').replace(/IMG\s*/i,'').trim();
+      const controls = document.createElement('div');
+      controls.className = 'flex gap-2';
+
+      if(currentCategory !== 'Hombres'){
+        const toH = document.createElement('button');
+        toH.className = 'px-2 py-1 text-xs rounded bg-slate-200 hover:bg-slate-300';
+        toH.textContent = '→ Hombres';
+        toH.onclick = ()=>{ moveToCategory(file,'Hombres'); };
+        controls.appendChild(toH);
+      }
+      if(currentCategory !== 'Mujeres'){
+        const toM = document.createElement('button');
+        toM.className = 'px-2 py-1 text-xs rounded bg-slate-200 hover:bg-slate-300';
+        toM.textContent = '→ Mujeres';
+        toM.onclick = ()=>{ moveToCategory(file,'Mujeres'); };
+        controls.appendChild(toM);
+      }
+      if(currentCategory){
+        const un = document.createElement('button');
+        un.className = 'px-2 py-1 text-xs rounded bg-red-200 hover:bg-red-300 ml-auto';
+        un.textContent = 'Quitar';
+        un.onclick = ()=>{ moveToCategory(file,''); };
+        controls.appendChild(un);
+      }
+
+      wrapper.appendChild(img);
+      wrapper.appendChild(title);
+      wrapper.appendChild(controls);
+      return wrapper;
+    }
+
+    function renderCategories(){
+      const map = loadImageCategories();
+      const colH = document.getElementById('col-hombres');
+      const colM = document.getElementById('col-mujeres');
+      const colU = document.getElementById('col-unassigned');
+      if(!colH || !colM || !colU) return; // seguridad
+      colH.innerHTML = '';
+      colM.innerHTML = '';
+      colU.innerHTML = '';
+      imageFiles.forEach(file=>{
+        const cat = map[file] || '';
+        if(cat === 'Hombres') colH.appendChild(createCategoryCard(file, cat));
+        else if(cat === 'Mujeres') colM.appendChild(createCategoryCard(file, cat));
+        else colU.appendChild(createCategoryCard(file, cat));
+      });
+    }
+
+    function moveToCategory(file, category){
+      const map = loadImageCategories();
+      if(!map[file]) map[file] = '';
+      map[file] = category || '';
+      saveImageCategories(map);
+      renderCategories();
+    }
+
+    // (Se removió la generación de QR; ahora usamos una ilustración más elegante en el CTA)
+
+
+    async function onConfigChange(config) {
+      const baseSize = config.font_size || defaultConfig.font_size;
+      const customFont = config.font_family || defaultConfig.font_family;
+      const baseFontStack = 'system-ui, -apple-system, sans-serif';
+      const fontFamily = `${customFont}, ${baseFontStack}`;
+
+      // Background colors
+      document.body.style.backgroundColor = config.background_color || defaultConfig.background_color;
+      document.querySelector('header').style.backgroundColor = config.header_color || defaultConfig.header_color;
+      
+      const heroSection = document.querySelector('section');
+      heroSection.style.backgroundColor = config.background_color || defaultConfig.background_color;
+      
+      const productsSection = document.querySelectorAll('section')[1];
+      productsSection.style.backgroundColor = config.background_color || defaultConfig.background_color;
+      
+      const featuresSection = document.querySelectorAll('section')[2];
+      featuresSection.style.backgroundColor = config.background_color || defaultConfig.background_color;
+      
+      const ctaSection = document.querySelectorAll('section')[3];
+      ctaSection.style.backgroundColor = config.primary_color || defaultConfig.primary_color;
+      
+      const ctaBox = ctaSection.querySelector('div > div');
+      ctaBox.style.backgroundColor = config.background_color || defaultConfig.background_color;
+
+      // Text colors
+      document.body.style.color = config.text_color || defaultConfig.text_color;
+      document.querySelector('header').style.color = config.text_color || defaultConfig.text_color;
+      ctaBox.style.color = config.text_color || defaultConfig.text_color;
+      
+      const modal = document.querySelector('#contact-modal > div:nth-child(2)');
+      modal.style.backgroundColor = config.card_color || defaultConfig.card_color;
+      modal.style.color = config.text_color || defaultConfig.text_color;
+
+      // Product cards
+      const cards = document.querySelectorAll('.product-card');
+      cards.forEach(card => {
+        card.style.backgroundColor = config.card_color || defaultConfig.card_color;
+        card.style.color = config.text_color || defaultConfig.text_color;
+      });
+
+      // Primary buttons
+      const buttons = document.querySelectorAll('.btn-primary');
+      buttons.forEach(btn => {
+        btn.style.backgroundColor = config.primary_color || defaultConfig.primary_color;
+        const isDark = isColorDark(config.primary_color || defaultConfig.primary_color);
+        btn.style.color = isDark ? '#ffffff' : '#000000';
+      });
+
+      // Badge
+      const badge = document.querySelector('.badge');
+      badge.style.backgroundColor = config.primary_color || defaultConfig.primary_color;
+      const isDark = isColorDark(config.primary_color || defaultConfig.primary_color);
+      badge.style.color = isDark ? '#ffffff' : '#000000';
+
+      // Update text content
+      document.getElementById('store-title').textContent = config.store_title || defaultConfig.store_title;
+      document.getElementById('tagline').textContent = config.tagline || defaultConfig.tagline;
+      document.getElementById('product1-name').textContent = config.product1_name || defaultConfig.product1_name;
+      document.getElementById('product1-price').textContent = config.product1_price || defaultConfig.product1_price;
+      document.getElementById('product2-name').textContent = config.product2_name || defaultConfig.product2_name;
+      document.getElementById('product2-price').textContent = config.product2_price || defaultConfig.product2_price;
+      document.getElementById('product3-name').textContent = config.product3_name || defaultConfig.product3_name;
+      document.getElementById('product3-price').textContent = config.product3_price || defaultConfig.product3_price;
+      document.getElementById('whatsapp-text').textContent = config.whatsapp_text || defaultConfig.whatsapp_text;
+      document.getElementById('contact-text').textContent = config.contact_text || defaultConfig.contact_text;
+
+      // Apply fonts
+      document.body.style.fontFamily = fontFamily;
+      document.getElementById('store-title').style.fontSize = `${baseSize * 1.875}px`;
+      document.getElementById('tagline').style.fontSize = `${baseSize * 0.875}px`;
+      document.querySelectorAll('h2').forEach(h => h.style.fontSize = `${baseSize * 3.125}px`);
+      document.querySelectorAll('h3').forEach(h => h.style.fontSize = `${baseSize * 1.875}px`);
+      document.querySelectorAll('h4').forEach(h => h.style.fontSize = `${baseSize * 1.25}px`);
+      document.querySelectorAll('p').forEach(p => p.style.fontSize = `${baseSize}px`);
+      document.querySelectorAll('button').forEach(b => b.style.fontSize = `${baseSize}px`);
+    }
+
+    function isColorDark(hexColor) {
+      const hex = hexColor.replace('#', '');
+      const r = parseInt(hex.substr(0, 2), 16);
+      const g = parseInt(hex.substr(2, 2), 16);
+      const b = parseInt(hex.substr(4, 2), 16);
+      const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+      return brightness < 128;
+    }
+
+
+    // Legacy selector: redirige al flujo de compra
+    function selectProduct(name, price) {
+      buyNow(name, price);
+    }
+
+    function showContactInfo() {
+      document.getElementById('contact-modal').classList.remove('hidden');
+    }
+
+    function hideContactInfo() {
+      document.getElementById('contact-modal').classList.add('hidden');
+    }
+
+    // Poner el año actual en el footer si existe
+    document.addEventListener('DOMContentLoaded', function(){
+      var y = document.getElementById('year');
+      if(y) y.textContent = new Date().getFullYear();
+      // Render products dynamically from the local images list
+      renderProducts();
+      // Render categorized collections
+      renderCategories();
+  // Nota: QR reemplazado por ilustración; no se genera imagen dinámica
+    });
+
+    // --- QR generation and modal ---
+    function generateStoreQR(){
+      try{
+        const img = document.getElementById('qr-img');
+        if(!img) return;
+        const wa = formatWhatsAppUrl(CONTACT_NUMBER, '¡Hola! Estoy viendo la tienda y quiero comprar.');
+        const urlGoogle = `https://chart.googleapis.com/chart?chs=300x300&cht=qr&chl=${encodeURIComponent(wa)}`;
+        const urlApiQr = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(wa)}`;
+        img.style.display = '';
+        // hide fallback area
+        const fb = document.getElementById('qr-fallback'); if(fb) fb.style.display='none';
+        img.onload = function(){ /* loaded successfully */ };
+          img.onerror = function(){
+            console.warn('Google Charts QR failed, trying api.qrserver.com');
+            // try alternate service
+            img.onerror = function(){
+              console.warn('Alternate QR service failed, showing link fallback');
+              img.style.display = 'none';
+              if(fb){
+                fb.style.display='block';
+                const a = fb.querySelector('#qr-link'); if(a){ a.href = wa; a.textContent = wa; }
+                const a2 = fb.querySelector('#qr-open-link'); if(a2) a2.href = wa;
+              }
+            };
+            img.src = urlApiQr;
+          };
+        // start with Google Charts
+        img.src = urlGoogle;
+      }catch(e){ console.warn('generateStoreQR error', e); }
+    }
+
+    function showQRModal(){
+      const m = document.getElementById('qr-modal');
+      if(!m) return;
+      m.classList.add('active');
+    }
+
+    function hideQRModal(){
+      const m = document.getElementById('qr-modal');
+      if(!m) return;
+      m.classList.remove('active');
+    }
+
+    if (window.elementSdk) {
+      window.elementSdk.init({
+        defaultConfig,
+        onConfigChange,
+        mapToCapabilities: (config) => ({
+          recolorables: [
+            {
+              get: () => config.background_color || defaultConfig.background_color,
+              set: (value) => {
+                config.background_color = value;
+                window.elementSdk.setConfig({ background_color: value });
+              }
+            },
+            {
+              get: () => config.card_color || defaultConfig.card_color,
+              set: (value) => {
+                config.card_color = value;
+                window.elementSdk.setConfig({ card_color: value });
+              }
+            },
+            {
+              get: () => config.text_color || defaultConfig.text_color,
+              set: (value) => {
+                config.text_color = value;
+                window.elementSdk.setConfig({ text_color: value });
+              }
+            },
+            {
+              get: () => config.primary_color || defaultConfig.primary_color,
+              set: (value) => {
+                config.primary_color = value;
+                window.elementSdk.setConfig({ primary_color: value });
+              }
+            },
+            {
+              get: () => config.header_color || defaultConfig.header_color,
+              set: (value) => {
+                config.header_color = value;
+                window.elementSdk.setConfig({ header_color: value });
+              }
+            }
+          ],
+          borderables: [],
+          fontEditable: {
+            get: () => config.font_family || defaultConfig.font_family,
+            set: (value) => {
+              config.font_family = value;
+              window.elementSdk.setConfig({ font_family: value });
+            }
+          },
+          fontSizeable: {
+            get: () => config.font_size || defaultConfig.font_size,
+            set: (value) => {
+              config.font_size = value;
+              window.elementSdk.setConfig({ font_size: value });
+            }
+          }
+        }),
+        mapToEditPanelValues: (config) => new Map([
+          ['store_title', config.store_title || defaultConfig.store_title],
+          ['tagline', config.tagline || defaultConfig.tagline],
+          ['product1_name', config.product1_name || defaultConfig.product1_name],
+          ['product1_price', config.product1_price || defaultConfig.product1_price],
+          ['product2_name', config.product2_name || defaultConfig.product2_name],
+          ['product2_price', config.product2_price || defaultConfig.product2_price],
+          ['product3_name', config.product3_name || defaultConfig.product3_name],
+          ['product3_price', config.product3_price || defaultConfig.product3_price],
+          ['whatsapp_text', config.whatsapp_text || defaultConfig.whatsapp_text],
+          ['contact_text', config.contact_text || defaultConfig.contact_text]
+        ])
+      });
+
+      onConfigChange(window.elementSdk.config);
+    }
+  </script>
+  <!-- QR modal and FAB -->
+  <div id="qr-modal" class="qr-modal" onclick="hideQRModal()">
+    <div class="qr-modal-content" onclick="event.stopPropagation()">
+      <h4 style="margin:0 0 8px 0">Escanea para abrir WhatsApp</h4>
+      <img id="qr-img" src="" alt="QR" />
+      <div id="qr-fallback" style="display:none; margin-top:12px;">
+        <p style="font-size:13px; color:#334155;">Si el QR no carga, puedes abrir el enlace directamente:</p>
+        <a id="qr-link" href="#" target="_blank" style="word-break:break-all; color:#1e40af; display:block; margin-bottom:8px;">Link</a>
+        <div style="display:flex; gap:8px; justify-content:center;">
+          <button class="px-3 py-1 rounded bg-slate-200" onclick="(function(){navigator.clipboard && navigator.clipboard.writeText(document.getElementById('qr-link').href); alert('Enlace copiado');})();">Copiar enlace</button>
+          <a class="px-3 py-1 rounded bg-emerald-500 text-white" id="qr-open-link" href="#" target="_blank">Abrir enlace</a>
+        </div>
+      </div>
+      <div><button class="qr-close" onclick="hideQRModal()">Cerrar</button></div>
+    </div>
+  </div>
+  <button id="qr-fab" class="qr-fab" title="QR" onclick="generateStoreQR(); showQRModal();">
+    QR
+  </button>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9acf13b3577be00f',t:'MTc2NTU2MTk2MS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
